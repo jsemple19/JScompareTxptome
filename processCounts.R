@@ -14,7 +14,7 @@ library(ggplot2)
 library("RColorBrewer")
 library("PoiClaClu")
 library("pheatmap")
-
+library(REBayes)
 # get funciton for converting gene names from WBID to publicID
 source("~/Documents/MeisterLab/GenomeVer/geneNameConversion/convertingGeneNamesFunction1.R")
 
@@ -195,29 +195,28 @@ idx<-match(c("hlh1exp_HLH1exp_vs_noHLH1","mes2_mes2_vs_wt",
 
 pdf(paste0("plots/contrasts.pdf"),paper="a4",height=11, width=8)
 par(mfrow=c(3,1))
-
 # loop through all the different contrasts of interest
 for (i in idx) {
   pthresh=0.05
   lfcthresh=0.5
-  i=idx[1]
+  #i=idx[1]
   # get results table
   res <- results(dds,name=allCoefs[i])
 
   # print summary to file
   cat(allCoefs[i],file=paste0("txt/summary_",allCoefs[i],".txt"),sep="\n")
-  capture.output(summary(res,alpha=thresh),file=paste0("txt/summary_",allCoefs[i],".txt"),append=T)
+  capture.output(summary(res,alpha=pthresh),file=paste0("txt/summary_",allCoefs[i],".txt"),append=T)
 
   # get shrunken logFC estimates
   resAsh <- lfcShrink(dds, coef=i, type="ashr")
   # print summary to file
-  capture.output(summary(resAsh,alpha=thresh),file=paste0("txt/summary_",allCoefs[i],".txt"),append=T)
+  capture.output(summary(resAsh,alpha=pthresh),file=paste0("txt/summary_",allCoefs[i],".txt"),append=T)
 
   #####################
   ### plots
   #####################
   # make MA plot
-  plotMA(resAsh, ylim=c(-3,3),alpha=thresh,main=allCoefs[i])
+  plotMA(resAsh, ylim=c(-3,3),alpha=pthresh,main=allCoefs[i])
 
   # plot histograms of p values
   hist(res$pvalue[res$baseMean > 1], breaks = 0:20/20,
@@ -249,4 +248,4 @@ for (i in idx) {
   write.csv(resAshOrdered, file = paste0("csv/results_",allCoefs[i],"_p",pthresh,"_lfc",lfcthresh,".csv"))
 }
 
-
+dev.off()
