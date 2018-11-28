@@ -1,4 +1,5 @@
 
+l<-list.files("../rawData",pattern="fastq.gz",all.files=T)
 sampleList<-read.delim("../sampleList.txt",sep=" ",stringsAsFactors=F)
 
 
@@ -17,7 +18,7 @@ newList$index[!idx]<-sampleList[!idx,"Index"]
 write.csv(newList,"../libList.csv",row.names=F)
 
 strainList<-data.frame(strain=c("200", "218", "284", "285"),
-                       hsHLH1=c(1,0,1,0),
+                       hsHLH1=c(1,0,0,1),
                        mes2=c(0,0,1,1))
 
 write.csv(strainList,"../strainList.csv",row.names=F)

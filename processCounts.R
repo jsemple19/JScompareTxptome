@@ -14,7 +14,7 @@ library(ggplot2)
 library("RColorBrewer")
 library("PoiClaClu")
 library("pheatmap")
-library(REBayes)
+#library(REBayes)
 # get funciton for converting gene names from WBID to publicID
 source("~/Documents/MeisterLab/GenomeVer/geneNameConversion/convertingGeneNamesFunction1.R")
 
@@ -193,6 +193,11 @@ idx<-match(c("hlh1exp_HLH1exp_vs_noHLH1","mes2_mes2_vs_wt",
              "fedstarved.hlh1expHLH1exp.mes2wt",
              "fedstarved.hlh1expHLH1exp.mes2mes2"),allCoefs)
 
+# remove pre-existing GOI.txt file
+if(file.exists("txt/GOI.txt")) {
+  file.remove("txt/GOI.txt")
+}
+
 pdf(paste0("plots/contrasts.pdf"),paper="a4",height=11, width=8)
 par(mfrow=c(3,1))
 # loop through all the different contrasts of interest
@@ -247,5 +252,83 @@ for (i in idx) {
   resAshOrdered <- resAshOrdered[resAshOrdered$padj<pthresh & abs(resAshOrdered$log2FoldChange)>lfcthresh,]
   write.csv(resAshOrdered, file = paste0("csv/results_",allCoefs[i],"_p",pthresh,"_lfc",lfcthresh,".csv"))
 }
-
 dev.off()
+
+
+###############################################################
+### correlate with growth stage
+###############################################################
+
+###############################
+## get worm stage specific expression
+###############################
+
+if(!dir.exists("externalData")) {
+  dir.create("externalData")
+}
+link="https://genome.cshlp.org/content/suppl/2016/09/20/gr.202663.115.DC1/Supplemental_Table_S2.gz"
+tcFile="expressionTC_Boeck-Waterston_GR2016"
+download.file(link,paste0("externalData/",tcFile,".gz"))
+system(paste0("gunzip externalData/",tcFile,".gz"))
+tcData<-read.table(paste0("externalData/",tcFile),stringsAsFactors=F,header=T)
+countCols<-c("N2_EE_50.720_counts","L1_counts","L2_counts","L3_counts","L4_counts","YA_counts")
+#dcpmCols<-c("N2_EE_50.720_dcpm","L1_dcpm","L2_dcpm","L3_dcpm","L4_dcpm","YA_dcpm")
+
+###############################
+## get gene names
+###############################
+IDS<-convertGeneNames(tcData$WormbaseName,inputType="seqID",
+                      outputType=c("seqID","WBgeneID","publicID"))
+tcCounts<-cbind(tcData[,countCols],IDS)
+#tcDcpm<-cbind(tcData[,dcpmCols],IDS)
+
+# remove rows with no valid name
+NArows<-is.na(IDS$WBgeneID)
+tcCounts<-tcCounts[!NArows,]
+#tcDcpm<-tcDcpm[!NArows,]
+
+###############################
+## extract count data from our samples and merge with time course data
+###############################
+sampleCounts<-as.data.frame(counts(dds))
+sampleCounts$WBgeneID<-rownames(sampleCounts)
+
+dCounts<-merge(sampleCounts,tcCounts,by="WBgeneID")
+#dDcpm<-merge(sampleCounts,tcDcpm,by="WBgeneID")
+
+# remove rows where tc data has few reads on average
+tooFew<-rowMeans(dCounts[,countCols])<100
+dCounts<-dCounts[!tooFew,]
+#dDcpm<-dDcpm[!tooFew,]
+
+# prepare matrix for correllation data
+tcCor<-as.data.frame(matrix(nrow=96,ncol=6))
+names(tcCor)<-countCols
+tcCor$sampleNames<-names(dCounts)[2:97]
+
+
+
+pdf(paste0("plots/tcGrowthCor.pdf"),paper="a4",height=11, width=8)
+par(mfrow=c(3,2))
+for (i in seq(2,97)) {
+  for (j in countCols) {
+    plot(log(dCounts[,j]+1),log(dCounts[,i]+1),xlab=paste(j),
+         ylab=paste(names(dCounts)[i],"counts"),pch=16, col="#11111144")
+    tcCor[i-1,j]<-cor(log(dCounts[,i]+1),log(dCounts[,j]+1))
+    rCounts<-lm(log(dCounts[,i]+1)~log(dCounts[,j]+1))
+    abline(rCounts$coefficients,col="red")
+    text(max(log(dCounts[,j]+1)),2,adj=1,
+         labels=substitute(paste(y,"=",m*x+b),
+                           list(m=round(rCounts$coeff[2],2),b=round(rCounts$coeff[1],2))))
+    title(substitute(paste(j," Pearson's ",R^2,"=",rsq),list(j=j,rsq=round(tcCor[i-1,j]^2,3))))
+    #hist(rCounts$residuals)
+  }
+}
+dev.off()
+
+# extract max correlation stage
+tcCor$stage<-countCols[apply(tcCor[countCols],1,which.max)]
+tcCor$stage<-gsub("_counts","",tcCor$stage)
+write.csv(tcCor,"csv/corrlationWithGrowthStage.csv",row.names=F)
+idx<-match(paste0(tcCor$sampleNames,"/quant.sf"),samples$salmonCountFiles)
+samples$stage<-tcCor$stage[idx]
