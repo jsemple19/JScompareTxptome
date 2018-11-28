@@ -54,14 +54,16 @@ baseName:=$(basename $(basename ${fileName})) #to remove both .fastq and .gz
 objects :=$(addsuffix _fastqc.html, ../rawData/fastQC/${baseName})\
 	$(addsuffix _fastqc.html, cutadapt/fastQC/${baseName})\
 	$(addsuffix _fastqc.html, trim/fastQC/${baseName})\
-	$(addsuffix .bam, bam/${baseName}) \
+	$(addsuffix .Aligned.out.bam, bam/${baseName}) \
 	$(addprefix salmon/mRNA/,$(addsuffix /quant.sf,${baseName})) \
 	$(addprefix salmon/ncRNA/,$(addsuffix /quant.sf,${baseName})) \
 	$(addprefix salmon/pseudoRNA/,$(addsuffix /quant.sf,${baseName})) \
 	$(addprefix salmon/tnRNA/,$(addsuffix /quant.sf,${baseName})) 
 
 intermediateObjects:=$(addprefix cutadapt/, $(addsuffix .fastq.gz, ${baseName}))\
-	$(addprefix trim/, $(addsuffix .fastq.gz, ${baseName}))
+	$(addprefix trim/, $(addsuffix .fastq.gz, ${baseName})) \
+	$(addsuffix .Aligned.out.sam, bam/${baseName}) \
+
 ###############################
 ########### RULES  ############
 ###############################
@@ -126,10 +128,14 @@ trim/fastQC/%_fastqc.html: trim/%.fastq.gz
 # STAR --runMode genomeGenerate --genomeDir ${genomeFile%/*} --genomeFastaFiles ${genomeFile} --sjdbGTFfile ${annotFile} --runThreadN 4
 
 # align to genome
-bam/%.bam: trim/%.fastq.gz
+bam/%.sam: trim/%.fastq.gz
 	mkdir -p bam
 	STAR --genomeDir ${genomeDir}  --readFilesIn trim/$*.fastq.gz --readFilesCommand zcat --outFileNamePrefix bam/$*. --runThreadN 4 --alignIntronMax 500 --quantMode GeneCounts
 
+# convet sam to bam
+bam/%.bam: bam/%.sam
+	samtools view -b $^ -o $@
+	rm $^
 
 #######################################################
 ## Count reads with Salmon                           ##
@@ -143,18 +149,18 @@ bam/%.bam: trim/%.fastq.gz
 
 # quantify mRNA transcripts
 salmon/mRNA/%/quant.sf: trim/%.fastq.gz
-	salmon quant -i ${mRNAindex} -l A -r trim/$*.fastq.gz -o salmon/mRNA/$* --numBootstraps 100
+	salmon quant -i ${mRNAindex} -l A -r trim/$*.fastq.gz -o salmon/mRNA/$* --gcBias --numBootstraps 100
 
 # quantify ncRNA transcripts
 salmon/ncRNA/%/quant.sf: trim/%.fastq.gz
-	salmon quant -i ${ncRNAindex} -l A -r trim/$*.fastq.gz -o salmon/ncRNA/$* --numBootstraps 100
+	salmon quant -i ${ncRNAindex} -l A -r trim/$*.fastq.gz -o salmon/ncRNA/$* --gcBias --numBootstraps 100
 
 # quantify pseudoRNA transcripts
 salmon/pseudoRNA/%/quant.sf: trim/%.fastq.gz
-	salmon quant -i ${pseudoIndex} -l A -r trim/$*.fastq.gz -o salmon/pseudoRNA/$* --numBootstraps 100
+	salmon quant -i ${pseudoIndex} -l A -r trim/$*.fastq.gz -o salmon/pseudoRNA/$* --gcBias --numBootstraps 100
 
 # quantify TnRNA transcripts
 salmon/tnRNA/%/quant.sf: trim/%.fastq.gz
-	salmon quant -i ${tnIndex} -l A -r trim/$*.fastq.gz -o salmon/tnRNA/$* --numBootstraps 100
+	salmon quant -i ${tnIndex} -l A -r trim/$*.fastq.gz -o salmon/tnRNA/$* --gcBias --numBootstraps 100
 
 
