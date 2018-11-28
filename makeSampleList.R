@@ -1,6 +1,6 @@
 
-l<-list.files("../rawData",pattern="fastq.gz",all.files=T)
-sampleList<-read.delim("../sampleList.txt",sep=" ",stringsAsFactors=F)
+#l<-list.files("../rawData",pattern="fastq.gz",all.files=T)
+sampleList<-read.delim("../fastqList.txt"," ",stringsAsFactors=F,header=T)
 
 
 newList<-as.data.frame(sampleList$Sample)
