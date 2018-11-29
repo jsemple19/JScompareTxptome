@@ -146,7 +146,9 @@ tcCor<-as.data.frame(matrix(nrow=96,ncol=6))
 names(tcCor)<-countCols
 tcCor$sampleNames<-names(dCounts)[2:97]
 
-
+###############################
+## Correlation with expression at different growth stages
+###############################
 
 pdf(paste0("plots/tcGrowthCor.pdf"),paper="a4",height=11, width=8)
 par(mfrow=c(3,2))
@@ -166,21 +168,25 @@ for (i in seq(2,97)) {
 }
 dev.off()
 
-# extract max correlation stage
+# extract at which stage the correlation is maximal
 tcCor$stage<-countCols[apply(tcCor[countCols],1,which.max)]
 tcCor$stage<-gsub("_counts","",tcCor$stage)
 write.csv(tcCor,"csv/corrlationWithGrowthStage.csv",row.names=F)
+# add stage info to samples objects
 idx<-match(paste0(tcCor$sampleNames,"/quant.sf"),samples$salmonCountFiles)
 samples$stage<-tcCor$stage[idx]
 
+# save new sampleList file (in current directory)
 write.csv(samples,"./sampleList.csv",row.names=F)
+# convert samples$stage to factor for DESeq2 model
+samples$stage<-factor(samples$stage,levels=c("L2","L3"))
 
 
 ###############################################################
-### Reread into DESeq2 with stage info
+### Reread into DESeq2 with **stage** info
 ###############################################################
 
-# read samples into DESeq2
+# read samples into DESeq2 with new model incorporating stage
 dds <- DESeqDataSetFromTximport(txi, samples,~lane+stage+hs+fed*mes2*hlh1exp)
 
 #dds<-collapseReplicates(dds,groupby=samples$sampleID,renameCols=T)
@@ -193,16 +199,12 @@ dds <- DESeq(dds)
 
 
 
-
-
-
-
 #####################
 ### heatmap sampleVgene
 #####################
 select <- order(rowMeans(counts(dds,normalized=TRUE)),
                 decreasing=TRUE)[1:200]
-df <- as.data.frame(colData(dds)[,c("hsHLH1","hs","hlh1exp","mes2","fed")])
+df <- as.data.frame(colData(dds)[,c("hsHLH1","hs","hlh1exp","mes2","fed","stage")])
 ntd <- normTransform(dds)  # does simple log transform + 1 pseudocounts
 if(!dir.exists("plots")) {
   dir.create("plots")
@@ -291,10 +293,9 @@ if(!dir.exists("csv")) {
 }
 
 allCoefs<-resultsNames(dds) # lists the coefficients
-idx<-match(c("hlh1exp_HLH1exp_vs_noHLH1","mes2_mes2_vs_wt",
-             "fedstarved.mes2mes2","hlh1expHLH1exp.mes2mes2",
-             "fedstarved.hlh1expHLH1exp.mes2wt",
-             "fedstarved.hlh1expHLH1exp.mes2mes2"),allCoefs)
+idx<-match(c("stage_L3_vs_L2","hs_hs_vs_noHs", "fed_starved_vs_fed",
+             "mes2_mes2_vs_wt","hlh1exp_HLH1exp_vs_noHLH1","fedstarved.mes2mes2",
+             "fedstarved.hlh1expHLH1exp","mes2mes2.hlh1expHLH1exp","fedstarved.mes2mes2.hlh1expHLH1exp"),allCoefs)
 
 # remove pre-existing GOI.txt file
 if(file.exists("txt/GOI.txt")) {
@@ -345,7 +346,7 @@ for (i in idx) {
   write.csv(resAshOrdered, file = paste0("csv/results_",allCoefs[i],"_all.csv"))
 
   # extract data for genes of interest (GOI) and write to file
-  GOI<-c("lin-12","lag-2")
+  GOI<-c("lin-12","lag-2","glp-1")
   j<-match(GOI,resAshOrdered$publicID)
   cat(allCoefs[i],file=paste0("txt/GOI.txt"),sep="\n",append=T)
   cat(paste(colnames(resAshOrdered),collapse="\t"),file=paste0("txt/GOI.txt"),sep="\n",append=T)
