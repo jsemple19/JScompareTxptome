@@ -262,6 +262,7 @@ plotPCA(vsd, intgroup=c("hs"))
 plotPCA(vsd, intgroup=c("hlh1exp"))
 plotPCA(vsd, intgroup=c("mes2"))
 plotPCA(vsd, intgroup=c("fed"))
+plotPCA(vsd, intgroup=c("stage"))
 dev.off()
 par(mfrow=c(1,1))
 ### for plotting more than 1 factor
