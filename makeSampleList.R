@@ -25,6 +25,7 @@ fastqList<-read.delim("../fastqList.txt",stringsAsFactors=F,header=F)
 names(fastqList)<-"fastqFile"
 
 nameFields<-sapply(basename(fastqList$fastqFile),strsplit,split="_")
+fastqList$date<-sapply(nameFields,"[[",1)
 fastqList$lane<-sapply(nameFields,"[[",4)
 fastqList$sampleID<-sapply(nameFields,"[[",5)
 
