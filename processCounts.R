@@ -45,7 +45,7 @@ sampleList<-read.csv("../sampleList.csv",stringsAsFactors=F)
 txdb<-loadDb(paste0("/Users/semple/Documents/MeisterLab/GenomeVer/annotations/",
               genomeVer,"/",genomeVer,".sqlite"))
 k <- keys(txdb, keytype = "TXNAME")
-tx2gene <- select(txdb, k, "GENEID", "TXNAME")
+tx2gene <- AnnotationDbi::select(txdb, k, "GENEID", "TXNAME")
 
 
 ###############################################################
@@ -108,6 +108,7 @@ dds <- DESeqDataSetFromTximport(txi, samples,~lane+hs+fed+hlh1exp+mes2)
 # reading in data from Boeck-Waterston_GR_2016 processed by externalDataSets.R script
 tcData<-read.csv(file=paste0("externalData/",tcFile,"_plots/stageCounts.csv"))
 countCols<-names(tcData)[1:8]
+
 ###############################
 ## get gene names
 ###############################
@@ -115,13 +116,18 @@ IDS<-convertGeneNames(tcData$WormbaseName,inputType="seqID",
                       outputType=c("seqID","WBgeneID","publicID"))
 tcCounts<-cbind(tcData[,countCols],IDS)
 
-IDS<-convertGeneNames(glData$WormbaseID,inputType="seqID",
-                      outputType=c("seqID","WBgeneID","publicID"))
-glData<-cbind(glData,IDS)
+#IDS<-convertGeneNames(glData$WormbaseID,inputType="seqID",
+ #                     outputType=c("seqID","WBgeneID","publicID"))
+#glData<-cbind(glData,IDS)
 
-idx<-which(tcCounts$WBgeneID %in% glData$WBgeneID)
-tcCounts$germline<-"soma"
-tcCounts$germline[idx]<-"germline"
+
+# idx<-which(tcCounts$WBgeneID %in% glData$WBgeneID)
+# tcCounts$germline<-"soma"
+# tcCounts$germline[idx]<-"germline"
+
+
+glData<-read.csv(paste0("externalData/",tcFile,"_plots/germlineSomaGenes.csv"))
+tcCounts<-merge(tcCounts,glData,by="WBgeneID")
 
 # remove rows with no valid name
 NArows<-is.na(tcCounts$WBgeneID)
@@ -194,10 +200,10 @@ for (g in geneSets) {
   tcCor.m<-tcCor.sort[,c(countCols,"infoNames")] %>% gather(stage,corCoef,-infoNames)
   p <- ggplot(tcCor.m, aes(stage,infoNames )) + geom_tile(aes(fill = corCoef), colour = "white") +
     scale_fill_gradient(low = "white", high = "steelblue") + ggtitle(paste(g,"genes"))
-  my.lines=data.frame(x1=rep(0.5,3),x2=rep(6.5,3),y1=cumsum(table(samples$strain))[1:3]+0.5,
+  my.lines=data.frame(x1=rep(0.5,3),x2=rep(8.5,3),y1=cumsum(table(samples$strain))[1:3]+0.5,
                       y2=cumsum(table(samples$strain))[1:3]+0.5)
   p<-p+geom_segment(data=my.lines, aes(x = x1, y = y1, xend=x2, yend=y2), size=0.8, inherit.aes=F)
-  ggsave(paste0("plots/tcGrowthCorCoeff_heatmap_",g,".pdf"),plot=p)
+  ggsave(paste0("plots/tcGrowthCorCoeff_heatmap_",g,".pdf"),plot=p,height=29,width=19,units="cm")
   # extract at which stage the correlation is maximal
   tcCor$stage<-countCols[apply(tcCor[countCols],1,which.max)]
   tcCor$stage<-gsub("_counts","",tcCor$stage)
@@ -210,7 +216,7 @@ for (g in geneSets) {
 # save new sampleList file (in current directory)
 write.csv(samples,"./sampleList.csv",row.names=F)
 # convert samples$stage to factor for DESeq2 model
-samples$stage<-factor(samples$stage,levels=c("L2","L3"))
+samples$stage<-factor(samples$stage_all,levels=c("L1","L2","L3"))
 
 
 ###############################################################
@@ -218,7 +224,7 @@ samples$stage<-factor(samples$stage,levels=c("L2","L3"))
 ###############################################################
 
 # read samples into DESeq2 with new model incorporating stage
-dds <- DESeqDataSetFromTximport(txi, samples,~lane+stage+hs+fed*mes2*hlh1exp)
+dds <- DESeqDataSetFromTximport(txi, samples,~replicate+stage+hsHLH1+hs+fed*mes2*hlh1exp)
 
 #dds<-collapseReplicates(dds,groupby=samples$sampleID,renameCols=T)
 dds <- DESeq(dds)
@@ -285,7 +291,8 @@ dev.off()
 par(mfrow=c(4,2))
 pdf(paste0("plots/pca_samples.pdf"),paper="a4",height=11, width=8)
 # do pca plots colouring by different factors
-plotPCA(vsd, intgroup=c("lane"))
+plotPCA(vsd, intgroup=c("replicate"))
+plotPCA(vsd, intgroup=c("date"))
 plotPCA(vsd, intgroup=c("sampleID"))
 plotPCA(vsd, intgroup=c("strain"))
 plotPCA(vsd, intgroup=c("hsHLH1"))
@@ -325,7 +332,7 @@ if(!dir.exists("csv")) {
 }
 
 allCoefs<-resultsNames(dds) # lists the coefficients
-idx<-match(c("stage_L3_vs_L2","hs_hs_vs_noHs", "fed_starved_vs_fed",
+idx<-match(c("stage_L2_vs_L1","stage_L3_vs_L1","hs_hs_vs_noHs", "hsHLH1_hsHLH1_vs_wt", "fed_starved_vs_fed",
              "mes2_mes2_vs_wt","hlh1exp_HLH1exp_vs_noHLH1","fedstarved.mes2mes2",
              "fedstarved.hlh1expHLH1exp","mes2mes2.hlh1expHLH1exp","fedstarved.mes2mes2.hlh1expHLH1exp"),allCoefs)
 

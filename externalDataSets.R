@@ -7,7 +7,7 @@ source("~/Documents/MeisterLab/GenomeVer/geneNameConversion/convertingGeneNamesF
 
 
 ###############################
-## get stage specific expression
+## get stage specific expression from Boeck-Waterston_GR2016
 ###############################
 
 if(!dir.exists("externalData")) {
@@ -66,10 +66,49 @@ tcAvgDF$WormbaseName<-tcData$WormbaseName
 write.csv(tcAvgDF,file=paste0("externalData/",tcFile,"_plots/stageCounts.csv"),row.names=F)
 
 
-#dcpmCols<-c("N2_EE_50.720_dcpm","L1_dcpm","L2_dcpm","L3_dcpm","L4_dcpm","YA_dcpm")
+###############################
+## get germline-soma genes from Boeck-Waterston_GR2016
+###############################
 
-glCounts<-tcData[,"N2_Ad_gonad.1.RZLI_counts"]
-somaCounts<-rowMeans(tcData[,c("L4JK1107soma_counts","L4JK1107soma.2_counts")])
+glCols<-c("L4JK1107soma_counts","L4JK1107soma.2_counts","N2_Ad_gonad.1.RZLI_counts")
+glCounts<-as.matrix(tcData[,glCols])
+IDS<-convertGeneNames(tcData$WormbaseName,inputType="seqID",
+                      outputType=c("seqID","WBgeneID","publicID"))
+row.names(glCounts)<-IDS$WBgeneID
+coldata<-data.frame(sampleNames=glCols,germline=factor(c("soma","soma","germline")))
+
+glCounts<-glCounts[!is.na(row.names(glCounts)),]
+
+
+dds <- DESeqDataSetFromMatrix(countData = glCounts,
+                              colData = coldata,
+                              design = ~ germline)
+
+featureData <- data.frame(gene=rownames(glCounts))
+mcols(dds) <- DataFrame(mcols(dds), featureData)
+mcols(dds)
+
+#remove genes with few reads
+keep <- rowSums(counts(dds)) >= 100
+dds <- dds[keep,]
+
+# estimate parameters
+dds <- DESeq(dds)
+res <- results(dds,alpha=0.05)
+summary(res)
+resLFC<- lfcShrink(dds,contrast=c("germline","germline","soma"),type="ashr")
+plotMA(resLFC)
+
+resUp_gl<-resLFC[resLFC$padj<0.05 & resLFC$log2FoldChange>1,]
+resDown_soma<-resLFC[resLFC$padj<0.05 & resLFC$log2FoldChange<(-1),]
+
+glvSoma<-data.frame(WBgeneID=c(rownames(resUp_gl),rownames(resDown_soma)),
+           germline=c(rep("germline",length(rownames(resUp_gl))), rep("soma",length(rownames(resDown_soma)))))
+write.csv(glvSoma,paste0("externalData/",tcFile,"_plots/germlineSomaGenes.csv"))
+
+###############################
+## get germline-soma genes from Reinke_DEV2004
+###############################
 
 glFile="germlineVsoma_Reinke_Dev2004"
 if (!file.exists(paste0("externalData/",glFile,"/Fig1\ I\ wt\ vs\ glp4\ enriched\ genes.txt"))) {
