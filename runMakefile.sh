@@ -6,7 +6,7 @@
 #SBATCH --cpus-per-task=4
 #SBATCH --partition=all
 #SBATCH --mem-per-cpu=4G
-#SBATCH --array=1-96
+#SBATCH --array=6-96
 #SBATCH --output=/home/ubelix/izb/semple/output/slurm-%j.out
 #SBATCH --error=/home/ubelix/izb/semple/error/slurm-%j.err
 
