@@ -14,6 +14,7 @@ library(ggplot2)
 library("RColorBrewer")
 library("PoiClaClu")
 library("pheatmap")
+library(tidyr)
 #library(REBayes)
 # get funciton for converting gene names from WBID to publicID
 source("~/Documents/MeisterLab/GenomeVer/geneNameConversion/convertingGeneNamesFunction1.R")
@@ -44,7 +45,7 @@ sampleList<-read.csv("../sampleList.csv",stringsAsFactors=F)
 txdb<-loadDb(paste0("/Users/semple/Documents/MeisterLab/GenomeVer/annotations/",
               genomeVer,"/",genomeVer,".sqlite"))
 k <- keys(txdb, keytype = "TXNAME")
-tx2gene <- select(txdb, k, "GENEID", "TXNAME")
+tx2gene <- AnnotationDbi::select(txdb, k, "GENEID", "TXNAME")
 
 
 ###############################################################
@@ -70,20 +71,160 @@ samples$mes2<-factor(ifelse(samples$mes2==1,"mes2","wt"),levels=c("wt","mes2"))
 samples$fed<-factor(ifelse(samples$fed==1,"fed","starved"),levels=c("fed","starved"))
 samples$hs<-factor(ifelse(samples$hs==1,"hs","noHs"),levels=c("noHs","hs"))
 #batch<-apply( samples[ , c("lane","sampleID") ] , 1 , paste , collapse = "-" )
-samples$lane<-factor(samples$lane)
+samples$replicate<-factor(apply(samples[,c("date","lane")],1,paste0,collapse="_"))
+levels(samples$replicate)<-1:length(levels(samples$replicate))
 samples$sampleID<-factor(samples$sampleID)
 samples$strain<-factor(samples$strain)
 samples$hsHLH1<-factor(ifelse(samples$hsHLH1==1,"hsHLH1","wt"),levels=c("wt","hsHLH1"))
+# crete meaninful and sortable names
+samples$infoNames<-apply(samples[,c("strain","fed","hs","hsHLH1","mes2","sampleID","replicate")],1,paste0,collapse="_")
 
 # read samples into DESeq2
-dds <- DESeqDataSetFromTximport(txi, samples,~lane+hs+fed+hlh1exp+mes2+
-                                  fed:mes2+hlh1exp:mes2+
-                                  fed:mes2:hlh1exp)
+dds <- DESeqDataSetFromTximport(txi, samples,~lane+hs+fed+hlh1exp+mes2)
 
 
 ###############################################################
 ### DESeq2 differential expression analysis (using negative binomial distribution)
 ###############################################################
+
+#dds<-collapseReplicates(dds,groupby=samples$sampleID,renameCols=T)
+#dds <- DESeq(dds)
+# This function performs a default analysis through the steps:
+#   1. estimation of size factors: estimateSizeFactors
+#   2. estimation of dispersion: estimateDispersions
+#   3. Negative Binomial GLM fitting and Wald statistics: nbinomWaldTest
+#   returns a DESeqDataSet object
+
+
+
+###############################################################
+### correlate with growth stage
+###############################################################
+
+###############################
+## get worm stage specific expression
+###############################
+
+# reading in data from Boeck-Waterston_GR_2016 processed by externalDataSets.R script
+tcData<-read.csv(file=paste0("externalData/",tcFile,"_plots/stageCounts.csv"))
+countCols<-names(tcData)[1:8]
+
+###############################
+## get gene names
+###############################
+IDS<-convertGeneNames(tcData$WormbaseName,inputType="seqID",
+                      outputType=c("seqID","WBgeneID","publicID"))
+tcCounts<-cbind(tcData[,countCols],IDS)
+
+#IDS<-convertGeneNames(glData$WormbaseID,inputType="seqID",
+ #                     outputType=c("seqID","WBgeneID","publicID"))
+#glData<-cbind(glData,IDS)
+
+
+# idx<-which(tcCounts$WBgeneID %in% glData$WBgeneID)
+# tcCounts$germline<-"soma"
+# tcCounts$germline[idx]<-"germline"
+
+
+glData<-read.csv(paste0("externalData/",tcFile,"_plots/germlineSomaGenes.csv"))
+tcCounts<-merge(tcCounts,glData,by="WBgeneID")
+
+# remove rows with no valid name
+NArows<-is.na(tcCounts$WBgeneID)
+tcCounts<-tcCounts[!NArows,]
+#tcDcpm<-tcDcpm[!NArows,]
+
+tcCounts$germline<-factor(tcCounts$germline)
+
+###############################
+## extract count data from our samples and merge with time course data
+###############################
+sampleCounts<-as.data.frame(counts(dds))
+sampleCounts$WBgeneID<-rownames(sampleCounts)
+
+dCounts<-merge(sampleCounts,tcCounts,by="WBgeneID")
+
+
+# remove rows where tc data has few reads on average
+tooFew<-rowMeans(dCounts[,countCols])<100
+dCounts<-dCounts[!tooFew,]
+
+
+
+###############################
+## Correlation with expression at different growth stages
+###############################
+keep_dCounts<-dCounts
+geneSets=c("all","germline","soma")
+for (g in geneSets) {
+  if (g=="all") {
+    dCounts<-keep_dCounts
+  }
+  if (g=="germline") {
+    dCounts<-keep_dCounts[keep_dCounts$germline=="germline",]
+  }
+  if (g=="soma") {
+    dCounts<-keep_dCounts[keep_dCounts$germline=="soma",]
+  }
+
+  pdf(paste0("plots/tcGrowthCor_",g,".pdf"),paper="a4",height=11, width=8)
+  par(mfrow=c(4,2))
+  # prepare matrix for correllation data
+  tcCor<-as.data.frame(matrix(nrow=96,ncol=length(countCols)))
+  names(tcCor)<-countCols
+  tcCor$sampleNames<-names(dCounts)[2:97]
+  # loop through samples
+  for (i in seq(2,97)) {
+    # loop through grwoth stages
+    for (j in countCols) {
+      # plot the correlation
+      plot(log(dCounts[,j]+1),log(dCounts[,i]+1),xlab=paste(j),
+           ylab=paste(names(dCounts)[i],"counts"),pch=16, col="#11111144")
+      # get corelation coefficient
+      tcCor[i-1,j]<-cor(log(dCounts[,i]+1),log(dCounts[,j]+1))
+      # add regression line and equation to plot
+      rCounts<-lm(log(dCounts[,i]+1)~log(dCounts[,j]+1))
+      abline(rCounts$coefficients,col="red")
+      text(max(log(dCounts[,j]+1)),2,adj=1,
+           labels=substitute(paste(y,"=",m*x+b),
+                             list(m=round(rCounts$coeff[2],2),b=round(rCounts$coeff[1],2))))
+      title(substitute(paste(g,j," Pearson's ",R^2,"=",rsq),list(g=g,j=j,rsq=round(tcCor[i-1,j]^2,3))))
+      #hist(rCounts$residuals)
+    }
+  }
+  dev.off()
+  # get informative and meaningfully sortable names
+  tcCor$infoNames<-samples$infoNames
+  tcCor.sort<-tcCor[order(tcCor$infoNames),]
+  # do heatmap of tcCor
+  tcCor.m<-tcCor.sort[,c(countCols,"infoNames")] %>% gather(stage,corCoef,-infoNames)
+  p <- ggplot(tcCor.m, aes(stage,infoNames )) + geom_tile(aes(fill = corCoef), colour = "white") +
+    scale_fill_gradient(low = "white", high = "steelblue") + ggtitle(paste(g,"genes"))
+  my.lines=data.frame(x1=rep(0.5,3),x2=rep(8.5,3),y1=cumsum(table(samples$strain))[1:3]+0.5,
+                      y2=cumsum(table(samples$strain))[1:3]+0.5)
+  p<-p+geom_segment(data=my.lines, aes(x = x1, y = y1, xend=x2, yend=y2), size=0.8, inherit.aes=F)
+  ggsave(paste0("plots/tcGrowthCorCoeff_heatmap_",g,".pdf"),plot=p,height=29,width=19,units="cm")
+  # extract at which stage the correlation is maximal
+  tcCor$stage<-countCols[apply(tcCor[countCols],1,which.max)]
+  tcCor$stage<-gsub("_counts","",tcCor$stage)
+  write.csv(tcCor,paste0("csv/corrlationWithGrowthStage_",g,".csv"),row.names=F)
+  # add stage info to samples objects
+  idx<-match(paste0(tcCor$sampleNames,"/quant.sf"),samples$salmonCountFiles)
+  samples[,paste0("stage_",g)]<-tcCor$stage[idx]
+}
+
+# save new sampleList file (in current directory)
+write.csv(samples,"./sampleList.csv",row.names=F)
+# convert samples$stage to factor for DESeq2 model
+samples$stage<-factor(samples$stage_all,levels=c("L1","L2","L3"))
+
+
+###############################################################
+### Reread into DESeq2 with **stage** info
+###############################################################
+
+# read samples into DESeq2 with new model incorporating stage
+dds <- DESeqDataSetFromTximport(txi, samples,~replicate+stage+hsHLH1+hs+fed*mes2*hlh1exp)
 
 #dds<-collapseReplicates(dds,groupby=samples$sampleID,renameCols=T)
 dds <- DESeq(dds)
@@ -94,12 +235,13 @@ dds <- DESeq(dds)
 #   returns a DESeqDataSet object
 
 
+
 #####################
 ### heatmap sampleVgene
 #####################
 select <- order(rowMeans(counts(dds,normalized=TRUE)),
                 decreasing=TRUE)[1:200]
-df <- as.data.frame(colData(dds)[,c("hsHLH1","hs","hlh1exp","mes2","fed")])
+df <- as.data.frame(colData(dds)[,c("hsHLH1","hs","hlh1exp","mes2","fed","stage")])
 ntd <- normTransform(dds)  # does simple log transform + 1 pseudocounts
 if(!dir.exists("plots")) {
   dir.create("plots")
@@ -149,7 +291,8 @@ dev.off()
 par(mfrow=c(4,2))
 pdf(paste0("plots/pca_samples.pdf"),paper="a4",height=11, width=8)
 # do pca plots colouring by different factors
-plotPCA(vsd, intgroup=c("lane"))
+plotPCA(vsd, intgroup=c("replicate"))
+plotPCA(vsd, intgroup=c("date"))
 plotPCA(vsd, intgroup=c("sampleID"))
 plotPCA(vsd, intgroup=c("strain"))
 plotPCA(vsd, intgroup=c("hsHLH1"))
@@ -157,6 +300,7 @@ plotPCA(vsd, intgroup=c("hs"))
 plotPCA(vsd, intgroup=c("hlh1exp"))
 plotPCA(vsd, intgroup=c("mes2"))
 plotPCA(vsd, intgroup=c("fed"))
+plotPCA(vsd, intgroup=c("stage"))
 dev.off()
 par(mfrow=c(1,1))
 ### for plotting more than 1 factor
@@ -188,10 +332,9 @@ if(!dir.exists("csv")) {
 }
 
 allCoefs<-resultsNames(dds) # lists the coefficients
-idx<-match(c("hlh1exp_HLH1exp_vs_noHLH1","mes2_mes2_vs_wt",
-             "fedstarved.mes2mes2","hlh1expHLH1exp.mes2mes2",
-             "fedstarved.hlh1expHLH1exp.mes2wt",
-             "fedstarved.hlh1expHLH1exp.mes2mes2"),allCoefs)
+idx<-match(c("stage_L2_vs_L1","stage_L3_vs_L1","hs_hs_vs_noHs", "hsHLH1_hsHLH1_vs_wt", "fed_starved_vs_fed",
+             "mes2_mes2_vs_wt","hlh1exp_HLH1exp_vs_noHLH1","fedstarved.mes2mes2",
+             "fedstarved.hlh1expHLH1exp","mes2mes2.hlh1expHLH1exp","fedstarved.mes2mes2.hlh1expHLH1exp"),allCoefs)
 
 # remove pre-existing GOI.txt file
 if(file.exists("txt/GOI.txt")) {
@@ -202,8 +345,8 @@ pdf(paste0("plots/contrasts.pdf"),paper="a4",height=11, width=8)
 par(mfrow=c(3,1))
 # loop through all the different contrasts of interest
 for (i in idx) {
-  pthresh=0.05
-  lfcthresh=0.5
+  pthresh=0.01
+  lfcthresh=1
   #i=idx[1]
   # get results table
   res <- results(dds,name=allCoefs[i])
@@ -242,93 +385,23 @@ for (i in idx) {
   write.csv(resAshOrdered, file = paste0("csv/results_",allCoefs[i],"_all.csv"))
 
   # extract data for genes of interest (GOI) and write to file
-  GOI<-c("lin-12","lag-2")
+  notch<-read.delim("../../francesca_starvation/NotchPathway.txt",stringsAsFactors=F,header=F)
+  hsp<-resAshOrdered$publicID[grep("hsp",resAshOrdered$publicID)]
+  GOI<-c(notch$V2,"daf-2","daf-16","hsp-12.1","hsp-12.2","hsp-16.1","hsp-16.2","hsp-16.41","hsp-16.48")
   j<-match(GOI,resAshOrdered$publicID)
   cat(allCoefs[i],file=paste0("txt/GOI.txt"),sep="\n",append=T)
   cat(paste(colnames(resAshOrdered),collapse="\t"),file=paste0("txt/GOI.txt"),sep="\n",append=T)
   cat(paste(apply(resAshOrdered[j,],1,paste,collapse="\t"),collapse="\n"),file=paste0("txt/GOI.txt"),sep="\n",append=T)
 
   # filter for best results
-  resAshOrdered <- resAshOrdered[resAshOrdered$padj<pthresh & abs(resAshOrdered$log2FoldChange)>lfcthresh,]
-  write.csv(resAshOrdered, file = paste0("csv/results_",allCoefs[i],"_p",pthresh,"_lfc",lfcthresh,".csv"))
+  resAshOrdered_up <- resAshOrdered[resAshOrdered$padj<pthresh & resAshOrdered$log2FoldChange>lfcthresh,]
+  write.csv(resAshOrdered_up, file = paste0("csv/results_",allCoefs[i],"_p",pthresh,"_lfc",lfcthresh,"_up.csv"))
+  # filter for best results
+  resAshOrdered_down <- resAshOrdered[resAshOrdered$padj<pthresh & resAshOrdered$log2FoldChange<(-lfcthresh),]
+  write.csv(resAshOrdered_down, file = paste0("csv/results_",allCoefs[i],"_p",pthresh,"_lfc",lfcthresh,"_down.csv"))
 }
 dev.off()
 
 
-###############################################################
-### correlate with growth stage
-###############################################################
-
-###############################
-## get worm stage specific expression
-###############################
-
-if(!dir.exists("externalData")) {
-  dir.create("externalData")
-}
-link="https://genome.cshlp.org/content/suppl/2016/09/20/gr.202663.115.DC1/Supplemental_Table_S2.gz"
-tcFile="expressionTC_Boeck-Waterston_GR2016"
-download.file(link,paste0("externalData/",tcFile,".gz"))
-system(paste0("gunzip externalData/",tcFile,".gz"))
-tcData<-read.table(paste0("externalData/",tcFile),stringsAsFactors=F,header=T)
-countCols<-c("N2_EE_50.720_counts","L1_counts","L2_counts","L3_counts","L4_counts","YA_counts")
-#dcpmCols<-c("N2_EE_50.720_dcpm","L1_dcpm","L2_dcpm","L3_dcpm","L4_dcpm","YA_dcpm")
-
-###############################
-## get gene names
-###############################
-IDS<-convertGeneNames(tcData$WormbaseName,inputType="seqID",
-                      outputType=c("seqID","WBgeneID","publicID"))
-tcCounts<-cbind(tcData[,countCols],IDS)
-#tcDcpm<-cbind(tcData[,dcpmCols],IDS)
-
-# remove rows with no valid name
-NArows<-is.na(IDS$WBgeneID)
-tcCounts<-tcCounts[!NArows,]
-#tcDcpm<-tcDcpm[!NArows,]
-
-###############################
-## extract count data from our samples and merge with time course data
-###############################
-sampleCounts<-as.data.frame(counts(dds))
-sampleCounts$WBgeneID<-rownames(sampleCounts)
-
-dCounts<-merge(sampleCounts,tcCounts,by="WBgeneID")
-#dDcpm<-merge(sampleCounts,tcDcpm,by="WBgeneID")
-
-# remove rows where tc data has few reads on average
-tooFew<-rowMeans(dCounts[,countCols])<100
-dCounts<-dCounts[!tooFew,]
-#dDcpm<-dDcpm[!tooFew,]
-
-# prepare matrix for correllation data
-tcCor<-as.data.frame(matrix(nrow=96,ncol=6))
-names(tcCor)<-countCols
-tcCor$sampleNames<-names(dCounts)[2:97]
 
 
-
-pdf(paste0("plots/tcGrowthCor.pdf"),paper="a4",height=11, width=8)
-par(mfrow=c(3,2))
-for (i in seq(2,97)) {
-  for (j in countCols) {
-    plot(log(dCounts[,j]+1),log(dCounts[,i]+1),xlab=paste(j),
-         ylab=paste(names(dCounts)[i],"counts"),pch=16, col="#11111144")
-    tcCor[i-1,j]<-cor(log(dCounts[,i]+1),log(dCounts[,j]+1))
-    rCounts<-lm(log(dCounts[,i]+1)~log(dCounts[,j]+1))
-    abline(rCounts$coefficients,col="red")
-    text(max(log(dCounts[,j]+1)),2,adj=1,
-         labels=substitute(paste(y,"=",m*x+b),
-                           list(m=round(rCounts$coeff[2],2),b=round(rCounts$coeff[1],2))))
-    title(substitute(paste(j," Pearson's ",R^2,"=",rsq),list(j=j,rsq=round(tcCor[i-1,j]^2,3))))
-    #hist(rCounts$residuals)
-  }
-}
-dev.off()
-
-# extract max correlation stage
-tcCor$stage<-countCols[apply(tcCor[countCols],1,which.max)]
-tcCor$stage<-gsub("_counts","",tcCor$stage)
-write.csv(tcCor,"csv/corrlationWithGrowthStage.csv",row.names=F)
-idx<-match(paste0(tcCor$sampleNames,"/quant.sf"),samples$salmonCountFiles)
-samples$stage<-tcCor$stage[idx]

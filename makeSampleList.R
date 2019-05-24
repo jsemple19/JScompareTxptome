@@ -1,19 +1,16 @@
 
-l<-list.files("../rawData",pattern="fastq.gz",all.files=T)
-sampleList<-read.delim("../sampleList.txt",sep=" ",stringsAsFactors=F)
+#l<-list.files("../rawData",pattern="fastq.gz",all.files=T)
 
+sampleList<-read.delim("./ringoSampleList.txt"," ",stringsAsFactors=F,header=T)
 
-newList<-as.data.frame(sampleList$Sample)
+newList<-as.data.frame(sampleList$Strain)
 names(newList)<-"strain"
-idx<-sampleList$Sample_type=="HS"
+idx<-sampleList$HS=="HS"
 newList$hs<-as.numeric(idx)
-newList$fed<-FALSE+(sampleList$Sample_type=="fed")+(sampleList$Library=="fed")
-newList$sampleID[idx]<-sampleList[idx,"type"]
-newList$sampleID[!idx]<-sampleList[!idx,"Library.1"]
-newList$RNA<-"total"
+newList$fed<-FALSE+(sampleList$Fed=="fed")
+newList$sampleID<-sampleList[,"Library_ID"]
 newList$libType<-"stranded_mRNA"
-newList$index[idx]<-sampleList[idx,"Insert"]
-newList$index[!idx]<-sampleList[!idx,"Index"]
+newList$index<-sampleList[,"Index"]
 
 write.csv(newList,"../libList.csv",row.names=F)
 
@@ -28,6 +25,7 @@ fastqList<-read.delim("../fastqList.txt",stringsAsFactors=F,header=F)
 names(fastqList)<-"fastqFile"
 
 nameFields<-sapply(basename(fastqList$fastqFile),strsplit,split="_")
+fastqList$date<-sapply(nameFields,"[[",1)
 fastqList$lane<-sapply(nameFields,"[[",4)
 fastqList$sampleID<-sapply(nameFields,"[[",5)
 
