@@ -1,0 +1,7 @@
+fileName	sampleName	repeatNum
+/home/ubelix/izb/semple/labData/Julie_RNAseq/raw_files/493HS1_L1_R1_001_8A90nChpJI4x.fastq.gz	493	HS1
+/home/ubelix/izb/semple/labData/Julie_RNAseq/raw_files/493HS2_L1_R1_001_x3NrFUVf7SxU.fastq.gz	493	HS2
+/home/ubelix/izb/semple/labData/Julie_RNAseq/raw_files/493HS3_L1_R1_001_it0uCKKLyBwB.fastq.gz	493	HS3
+/home/ubelix/izb/semple/labData/Julie_RNAseq/raw_files/500HS1_L1_R1_001_wqu7itYZ5fpk.fastq.gz	500	HS1
+/home/ubelix/izb/semple/labData/Julie_RNAseq/raw_files/500HS2_L1_R1_001_46Ab9QpklKk2.fastq.gz	500	HS2
+/home/ubelix/izb/semple/labData/Julie_RNAseq/raw_files/500HS3_L1_R1_001_7nUAnKxVBcwo.fastq.gz	500	HS3
