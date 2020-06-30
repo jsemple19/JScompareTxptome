@@ -101,8 +101,10 @@ mkdir -p ${WORK_DIR}/bamSTAR
 STAR --genomeDir ${GENOME_DIR}/sequence  --readFilesIn ${WORK_DIR}/cutadapt/${baseName}.fastq.gz --readFilesCommand zcat --outFileNamePrefix ${WORK_DIR}/bamSTAR/${baseName}_ --runThreadN $nThreads --alignIntronMax 500 --quantMode GeneCounts
 
 # convert sam to bam
-samtools view -b ${WORK_DIR}/bamSTAR/${baseName}.sam -o ${WORK_DIR}/bamSTAR/${baseName}.bam
-rm ${WORK_DIR}/bamSTAR/${baseName}.sam
+samtools view -b ${WORK_DIR}/bamSTAR/${baseName}_Aligned.out.sam -o ${WORK_DIR}/bamSTAR/${baseName}_Aligned.out.bam
+rm ${WORK_DIR}/bamSTAR/${baseName}_Aligned.out.sam
+
+
 
 #######################################################
 ## Count reads with Salmon                           ##
@@ -132,14 +134,12 @@ rm ${WORK_DIR}/salmon/ncRNA_${baseName}.sam
 ${SALMON_SING} salmon quant -i ${pseudoIndex} -l A -r ${WORK_DIR}/cutadapt/${baseName}.fastq.gz --validateMappings -p ${nThreads} -o ${WORK_DIR}/salmon/pseudoRNA/${baseName} --seqBias --gcBias --numBootstraps 100  --writeMappings ${WORK_DIR}/salmon/pseudoRNA_${baseName}.sam
  
 samtools view -bh -o ${WORK_DIR}/salmon/pseudoRNA_${baseName}.bam ${WORK_DIR}/salmon/pseudoRNA_${baseName}.sam
-
 rm ${WORK_DIR}/salmon/pseudoRNA_${baseName}.sam
 
 # quantify TnRNA transcripts
 ${SALMON_SING} salmon quant -i ${tnIndex} -l A -r ${WORK_DIR}/cutadapt/${baseName}.fastq.gz --validateMappings -p ${nThreads} -o ${WORK_DIR}/salmon/tnRNA/${baseName} --seqBias --gcBias --numBootstraps 100 --writeMappings ${WORK_DIR}/salmon/tnRNA_${baseName}.sam
  
 samtools view -bh -o ${WORK_DIR}/salmon/tnRNA_${baseName}.bam ${WORK_DIR}/salmon/tnRNA_${baseName}.sam
-
- 
+rm ${WORK_DIR}/salmon/tnRNA_${baseName}.sam
 
 
