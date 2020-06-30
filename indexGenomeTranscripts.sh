@@ -1,8 +1,8 @@
 #! /usr/bin/bash
 #SBATCH --mail-user=jennifer.semple@izb.unibe.ch
 #SBATCH --mail-type=end,fail
-#SBATCH --job-name="RNAseq"
-#SBATCH --time=0-24:00:00
+#SBATCH --job-name="index_gentrome"
+#SBATCH --time=0-08:00:00
 #SBATCH --cpus-per-task=4
 #SBATCH --partition=all
 #SBATCH --mem-per-cpu=8G
@@ -32,23 +32,23 @@ mkdir -p ${GENOME_DIR}/annotation
 ############
 
 genomeFile=${GENOME_DIR}/sequence/c_elegans.PRJNA13758.${genomeVer}.genomic.fa
-#curl ftp://ftp.wormbase.org/pub/wormbase/species/c_elegans/PRJNA13758/sequence/genomic/c_elegans.PRJNA13758.${genomeVer}.genomic.fa.gz -o ${genomeFile}.gz
-#gunzip ${genomeFile}.gz 
-#
-#annotFile=${GENOME_DIR}/annotation/c_elegans.PRJNA13758.${genomeVer}.annotations.gff3.gz
-#curl ftp://ftp.wormbase.org/pub/wormbase/species/c_elegans/gff/c_elegans.PRJNA13758.${genomeVer}.annotations.gff3.gz -o $annotFile 
-#gunzip $annotFile
-#
-#annotFile=${annotFile%.gz}
-## use gffread from cufflinks to convert gff to gtf
-#b=(`basename -s .gff3 ${annotFile}`)
-#gffread $annotFile -T -o ${annotFile%/*}/${b}.gtf
-##rm $annotFile
-#
-## need to remove wierd exons:
+curl ftp://ftp.wormbase.org/pub/wormbase/species/c_elegans/PRJNA13758/sequence/genomic/c_elegans.PRJNA13758.${genomeVer}.genomic.fa.gz -o ${genomeFile}.gz
+gunzip ${genomeFile}.gz 
+
+annotFile=${GENOME_DIR}/annotation/c_elegans.PRJNA13758.${genomeVer}.annotations.gff3.gz
+curl ftp://ftp.wormbase.org/pub/wormbase/species/c_elegans/gff/c_elegans.PRJNA13758.${genomeVer}.annotations.gff3.gz -o $annotFile 
+gunzip $annotFile
+
+annotFile=${annotFile%.gz}
+# use gffread from cufflinks to convert gff to gtf
+b=(`basename -s .gff3 ${annotFile}`)
+gffread $annotFile -T -o ${annotFile%/*}/${b}.gtf
+#rm $annotFile
+
+# need to remove wierd exons:
 annotFile=${GENOME_DIR}/annotation/c_elegans.PRJNA13758.${genomeVer}.annotations.gtf
-#grep WormBase ${annotFile} > ${GENOME_DIR}/annotation/c_elegans.PRJNA13758.${genomeVer}.annotations1.gtf
-#mv  ${GENOME_DIR}/annotation/c_elegans.PRJNA13758.${genomeVer}.annotations1.gtf ${annotFile}
+grep WormBase ${annotFile} > ${GENOME_DIR}/annotation/c_elegans.PRJNA13758.${genomeVer}.annotations1.gtf
+mv  ${GENOME_DIR}/annotation/c_elegans.PRJNA13758.${genomeVer}.annotations1.gtf ${annotFile}
  
 #mv c_elegans.PRJNA13758.${genomeVer}.annotations.gtf $annotFile
 
