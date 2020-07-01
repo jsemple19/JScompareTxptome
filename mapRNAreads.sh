@@ -9,16 +9,10 @@
 #SBATCH --array=1-6
 
 module add vital-it
-#module add UHTS/Quality_control/fastqc/0.11.5
 module add UHTS/Quality_control/fastqc/0.11.7;
-#module add UHTS/Quality_control/cutadapt/1.13
 module add UHTS/Quality_control/cutadapt/2.5;
-#module add UHTS/Analysis/trimmomatic/0.36;
-#module add UHTS/Aligner/STAR/2.6.0c;
 module add UHTS/Aligner/STAR/2.7.3a;
 module add UHTS/Analysis/samtools/1.10;
-#module add UHTS/Analysis/samtools/1.8;
-#module add UHTS/Analysis/salmon/0.11.2;
 export SALMON_SING="singularity exec /software/singularity/containers/salmon-1.2.1-1.ubuntu18.sif"
 
 fastqFileList=./fastqList.txt
@@ -75,7 +69,7 @@ baseName=${sampleName}_${repeatNum}
 
 #run fastqc on sequences
 mkdir -p ${WORK_DIR}/qc/rawData
-fastqc ${fastqFile} -o ${WORK_DIR}/qc/rawData 
+fastqc ${fastqFile} -t $nThreads -o ${WORK_DIR}/qc/rawData 
 	
 #######################################################
 ## trim adaptors with cutadapt                       ##
@@ -87,7 +81,7 @@ cutadapt -a AGATCGGAAGAGCACACGTCTGAACTCCAGTCAC -o cutadapt/${baseName}.fastq.gz 
 
 #redo fastQC on trimmed reads
 mkdir -p ${WORK_DIR}/qc/cutadapt
-fastqc cutadapt/${baseName}.fastq.gz -o ${WORK_DIR}/qc/cutadapt
+fastqc cutadapt/${baseName}.fastq.gz -t $nThreads -o ${WORK_DIR}/qc/cutadapt
 
 		
 #######################################################
@@ -100,10 +94,10 @@ echo "aligning to genome..."
 mkdir -p ${WORK_DIR}/bamSTAR
 STAR --genomeDir ${GENOME_DIR}/sequence  --readFilesIn ${WORK_DIR}/cutadapt/${baseName}.fastq.gz --readFilesCommand zcat --outFileNamePrefix ${WORK_DIR}/bamSTAR/${baseName}_ --runThreadN $nThreads --alignIntronMax 500 --quantMode GeneCounts
 
-# convert sam to bam
-samtools view -b ${WORK_DIR}/bamSTAR/${baseName}_Aligned.out.sam -o ${WORK_DIR}/bamSTAR/${baseName}_Aligned.out.bam
+# convert sam to bam, sort and index
+samtools view -@ $nThreads -b ${WORK_DIR}/bamSTAR/${baseName}_Aligned.out.sam | samtools sort -@ $nThreads -o ${WORK_DIR}/bamSTAR/${baseName}.sorted.bam -
+samtools index -@ $nThreads ${WORK_DIR}/bamSTAR/${baseName}.sorted.bam
 rm ${WORK_DIR}/bamSTAR/${baseName}_Aligned.out.sam
-
 
 
 #######################################################
