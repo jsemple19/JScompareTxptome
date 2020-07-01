@@ -77,7 +77,7 @@ fastqc ${fastqFile} -t $nThreads -o ${WORK_DIR}/qc/rawData
 
 # use cutadapt to trim
 mkdir -p cutadapt
-cutadapt -a AGATCGGAAGAGCACACGTCTGAACTCCAGTCAC -o cutadapt/${baseName}.fastq.gz  ${fastqFile}
+cutadapt -a AGATCGGAAGAGCACACGTCTGAACTCCAGTCAC -o cutadapt/${baseName}.fastq.gz -j $nThreads ${fastqFile}
 
 #redo fastQC on trimmed reads
 mkdir -p ${WORK_DIR}/qc/cutadapt
