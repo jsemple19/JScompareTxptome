@@ -14,6 +14,7 @@ module add UHTS/Quality_control/cutadapt/2.5;
 module add UHTS/Aligner/STAR/2.7.3a;
 module add UHTS/Analysis/samtools/1.10;
 export SALMON_SING="singularity exec /software/singularity/containers/salmon-1.2.1-1.ubuntu18.sif"
+module add R/3.6.1;
 
 fastqFileList=./fastqList.txt
 fastqFile=(`cut -f1 $fastqFileList`)
@@ -100,6 +101,12 @@ samtools index -@ $nThreads ${WORK_DIR}/bamSTAR/${baseName}.sorted.bam
 rm ${WORK_DIR}/bamSTAR/${baseName}_Aligned.out.sam
 
 
+# create bigwig coverage tracks from bam
+mkdir -p ${WORK_DIR}/tracks
+Rscript makeCoverageBigwig.R ${WORK_DIR}/bamSTAR/${baseName}.sorted.bam ${WORK_DIR}/tracks/${baseName}_raw.bw raw
+Rscript makeCoverageBigwig.R ${WORK_DIR}/bamSTAR/${baseName}.sorted.bam ${WORK_DIR}/tracks/${baseName}_rpm.bw rpm
+
+
 #######################################################
 ## Count reads with Salmon                           ##
 #######################################################
@@ -108,32 +115,20 @@ rm ${WORK_DIR}/bamSTAR/${baseName}_Aligned.out.sam
 # See separate script indexTxpts4salmon.sh
 
 ######## NOTE: I do not have estimates for --fldMean and --fldSD as i have no access to the bioanalyser files #########
-#######  therefore the quantification based on the effective transcript length will be wrong!!!! ######
+#######  therefore the quantification based on the effective transcript length will be wrong!!!! Not sure how important this is?  ######
 
 # quantify mRNA transcripts
-${SALMON_SING} salmon quant -i ${mRNAindex} -l A -r ${WORK_DIR}/cutadapt/${baseName}.fastq.gz --validateMappings -p ${nThreads} -o ${WORK_DIR}/salmon/mRNA/${baseName} --seqBias --gcBias --numBootstraps 100 --writeMappings ${WORK_DIR}/salmon/mRNA_${baseName}.sam
+${SALMON_SING} salmon quant -i ${mRNAindex} -l A -r ${WORK_DIR}/cutadapt/${baseName}.fastq.gz --validateMappings -p ${nThreads} -o ${WORK_DIR}/salmon/mRNA/${baseName} --seqBias --gcBias --numBootstraps 100 
  
-samtools view -bh -o ${WORK_DIR}/salmon/mRNA_${baseName}.bam ${WORK_DIR}/salmon/mRNA_${baseName}.sam
-rm ${WORK_DIR}/salmon/mRNA_${baseName}.sam
-
-
 # quantify ncRNA transcripts
-${SALMON_SING} salmon quant -i ${ncRNAindex} -l A -r ${WORK_DIR}/cutadapt/${baseName}.fastq.gz --validateMappings -p ${nThreads} -o ${WORK_DIR}/salmon/ncRNA/${baseName} --seqBias --gcBias --numBootstraps 100  --writeMappings ${WORK_DIR}/salmon/ncRNA_${baseName}.sam
+${SALMON_SING} salmon quant -i ${ncRNAindex} -l A -r ${WORK_DIR}/cutadapt/${baseName}.fastq.gz --validateMappings -p ${nThreads} -o ${WORK_DIR}/salmon/ncRNA/${baseName} --seqBias --gcBias --numBootstraps 100  
  
-samtools view -bh -o ${WORK_DIR}/salmon/ncRNA_${baseName}.bam ${WORK_DIR}/salmon/ncRNA_${baseName}.sam
-rm ${WORK_DIR}/salmon/ncRNA_${baseName}.sam
-
-
 # quantify pseudoRNA transcripts
-${SALMON_SING} salmon quant -i ${pseudoIndex} -l A -r ${WORK_DIR}/cutadapt/${baseName}.fastq.gz --validateMappings -p ${nThreads} -o ${WORK_DIR}/salmon/pseudoRNA/${baseName} --seqBias --gcBias --numBootstraps 100  --writeMappings ${WORK_DIR}/salmon/pseudoRNA_${baseName}.sam
+${SALMON_SING} salmon quant -i ${pseudoIndex} -l A -r ${WORK_DIR}/cutadapt/${baseName}.fastq.gz --validateMappings -p ${nThreads} -o ${WORK_DIR}/salmon/pseudoRNA/${baseName} --seqBias --gcBias --numBootstraps 100  
  
-samtools view -bh -o ${WORK_DIR}/salmon/pseudoRNA_${baseName}.bam ${WORK_DIR}/salmon/pseudoRNA_${baseName}.sam
-rm ${WORK_DIR}/salmon/pseudoRNA_${baseName}.sam
 
 # quantify TnRNA transcripts
-${SALMON_SING} salmon quant -i ${tnIndex} -l A -r ${WORK_DIR}/cutadapt/${baseName}.fastq.gz --validateMappings -p ${nThreads} -o ${WORK_DIR}/salmon/tnRNA/${baseName} --seqBias --gcBias --numBootstraps 100 --writeMappings ${WORK_DIR}/salmon/tnRNA_${baseName}.sam
+${SALMON_SING} salmon quant -i ${tnIndex} -l A -r ${WORK_DIR}/cutadapt/${baseName}.fastq.gz --validateMappings -p ${nThreads} -o ${WORK_DIR}/salmon/tnRNA/${baseName} --seqBias --gcBias --numBootstraps 100 
  
-samtools view -bh -o ${WORK_DIR}/salmon/tnRNA_${baseName}.bam ${WORK_DIR}/salmon/tnRNA_${baseName}.sam
-rm ${WORK_DIR}/salmon/tnRNA_${baseName}.sam
 
 
