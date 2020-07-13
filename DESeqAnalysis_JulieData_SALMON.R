@@ -28,6 +28,11 @@ genomeDir=paste0("~/Documents/MeisterLab/GenomeVer/",genomeVer)
 
 genomeGR<-GRanges(seqnames=seqnames(Celegans)[1:6], IRanges(start=1, end=seqlengths(Celegans)[1:6]))
 
+wbseqinfo<-seqinfo(Celegans)
+seqnames(wbseqinfo)<-c(gsub("chr","",seqnames(Celegans)))
+seqnames(wbseqinfo)<-c(gsub("^M$","MtDNA",seqnames(wbseqinfo)))
+genome(wbseqinfo)<-genomeVer
+
 dir.create(paste0(outPath,"/rds/"),recursive=T)
 dir.create(paste0(outPath,"/plots/"),recursive=T)
 dir.create(paste0(outPath,"/txt/"),recursive=T)
@@ -657,4 +662,49 @@ print(summaryByChr(resLFC,pThres=0.01,LFCthresh=1))
 sink()
 #summary(resLFC,alpha=0.05)
 
+#######
+# average bw tracks
+######
 
+biolSamples<-unique(sampleTable$dpy26)
+avrFiles<-c()
+for (biolSample in biolSamples) {
+  idx<-which(sampleTable$dpy26==biolSample)
+  bwFiles<-paste0(outPath, "/tracks/",
+                  sampleTable$sampleName[idx],
+                  "_rpm.bw")
+  wigFile<-paste0(outPath, "/tracks/dpy26", unique(sampleTable$dpy26[idx]),
+                  "_",unique(sampleTable$strain[idx]) ,"_rpm_Avr.wig")
+  system(paste0("wiggletools mean ", paste0(bwFiles,collapse=" "),
+                " > ", wigFile ))
+
+  logwigFile<-gsub("_Avr","_logAvr", wigFile )
+  system(paste0("wiggletools offset 1 ", wigFile, " | wiggletools log 2 - >",
+                logwigFile))
+
+  wigToBigWig(x=wigFile, seqinfo=wbseqinfo,
+              dest=gsub("\\.wig$","\\.bw",wigFile))
+  wigToBigWig(x=logwigFile, seqinfo=wbseqinfo,
+              dest=gsub("\\.wig$","\\.bw",logwigFile))
+  avrFiles<-c(avrFiles,logwigFile)
+  file.remove(wigFile)
+  file.remove(logwigFile)
+}
+
+# single log fold change track
+system(paste0("wiggletools diff ",paste0(avrFiles,collapse=" ")," > ",
+              paste0(outPath,"/tracks/lfc_dpy26cs_dpy26wt.wig")))
+wigToBigWig(x=paste0(outPath,"/tracks/lfc_dpy26cs_dpy26wt.wig"),
+            seqinfo=wbseqinfo,
+            dest=paste0(outPath,"/tracks/lfc_dpy26cs_dpy26wt.bw"))
+file.remove(paste0(outPath,"/tracks/lfc_dpy26cs_dpy26wt.wig"))
+
+
+#system(paste0("wiggletools diff ",
+#              gsub("_logAvr","_Avr", paste0(avrFiles,collapse=" "))," > ",
+#              paste0(outPath,"/tracks/diff_dpy26cs_dpy26wt.wig")))
+
+#wigToBigWig(x=paste0(outPath,"/tracks/diff_dpy26cs_dpy26wt.wig"),
+#            seqinfo=wbseqinfo,
+#            dest=paste0(outPath,"/tracks/diff_dpy26cs_dpy26wt.bw"))
+#file.remove(paste0(outPath,"/tracks/diff_dpy26cs_dpy26wt.wig"))
