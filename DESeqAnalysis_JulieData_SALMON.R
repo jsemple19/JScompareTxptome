@@ -403,7 +403,7 @@ cat(sum(chrXres05$log2FoldChange<0),"\n")
 #40
 
 upOnX<-chrXres05[chrXres05$log2FoldChange>0,]
-write.table(rownames(upOnX), file=paste0(outPath,"/txt/",fileNamePrefix,"DCCgenes_JulieRNAseq.xls"),
+write.table(rownames(upOnX), file=paste0(outPath,"/txt/",fileNamePrefix,"DCCgenes_JulieRNAseq_upOnX_p",Threshold,".csv"),
             row.names=FALSE,col.names=FALSE)
 
 plotMA(chrXres,main="chrX genes",ylim=c(-4,4),alpha=Threshold)
@@ -708,3 +708,38 @@ file.remove(paste0(outPath,"/tracks/lfc_dpy26cs_dpy26wt.wig"))
 #            seqinfo=wbseqinfo,
 #            dest=paste0(outPath,"/tracks/diff_dpy26cs_dpy26wt.bw"))
 #file.remove(paste0(outPath,"/tracks/diff_dpy26cs_dpy26wt.wig"))
+
+
+##### create filtered tables of gene names
+results<-readRDS(paste0(outPath,"/rds/",fileNamePrefix,"_DESeq2_fullResults.rds"))
+
+filterResults<-function(resultsTable, padj=0.05, lfc=0, direction="both",
+                        chr="all") {
+  if(direction=="both") {
+    idx<-!is.na(resultsTable$padj) & resultsTable$padj<padj & abs(resultsTable$log2FoldChange)>lfc
+  } else if(direction=="gt") {
+    idx<-!is.na(resultsTable$padj) & resultsTable$padj<padj & resultsTable$log2FoldChange>lfc
+  } else if(direction=="lt") {
+    idx<-!is.na(resultsTable$padj) & resultsTable$padj<padj & resultsTable$log2FoldChange<lfc
+  } else {
+    print("direction must be 'both' to get both tails, \n'gt' to get lfc larger than a specific value, \nor 'lt' to get lfc less than a certain value")
+  }
+  if(chr=="all"){
+    idx<-idx
+  } else if(chr=="chrX"){
+    idx<-idx & resultsTable$chr=="chrX"
+  } else if(chr=="autosomes"){
+    idx<-idx & resultsTable$chr!="chrX"
+  } else {
+    print("chr must be one of 'all', 'chrX' or 'autosomes'")
+  }
+  filtTable<-resultsTable[idx,c("baseMean","log2FoldChange","padj",
+                                "wormbase","chr","start","end","strand")]
+  write.csv(filtTable,file=paste0(outPath,"/txt/filtResults_p",
+                                      padjVal,"_",direction,"-","lfc",
+                                      lfcVal,"_",chr,".csv"), row.names=F,
+                                      quote=F)
+  return(filtTable)
+}
+
+filterResults(results,padj=0.05,lfc=0,"both","all")
