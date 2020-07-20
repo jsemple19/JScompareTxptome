@@ -1,3 +1,7 @@
+library(readxl)
+library(ggVennDiagram)
+source("functions.R")
+
 outPath="."
 
 salmon<-readRDS(paste0(outPath,"/rds/salmon_DESeq2_fullResults.rds"))
@@ -93,7 +97,7 @@ ddff[idx,]
 
 ##############
 #############
-library(ggVennDiagram)
+
 
 par(mfrow=c(3,1))
 
@@ -158,7 +162,10 @@ p3<-ggVennDiagram(x) + ggtitle(label=paste0("Down on autosomes: lfc< -", lfcVal,
 
 
 p<-ggpubr::ggarrange(p1,p2,p3,ncol=3,nrow=1)
-ggplot2::ggsave(filename=paste0(outPath, "/plots/", "venn_", "padj",
+ggplot2::ggsave(filename=paste0(outPath, "/plots/venn_Aligners_padj",
                                 formatC(padjVal,format="e",digits=0),
                        "_lfc", formatC(lfcVal,format="e",digits=0), ".pdf"),
        plot=p, device="pdf",width=29,height=10,units="cm")
+
+
+

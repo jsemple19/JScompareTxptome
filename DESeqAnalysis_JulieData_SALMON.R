@@ -711,35 +711,33 @@ file.remove(paste0(outPath,"/tracks/lfc_dpy26cs_dpy26wt.wig"))
 
 
 ##### create filtered tables of gene names
+outPath="."
+fileNamePrefix="salmon"
 results<-readRDS(paste0(outPath,"/rds/",fileNamePrefix,"_DESeq2_fullResults.rds"))
 
-filterResults<-function(resultsTable, padj=0.05, lfc=0, direction="both",
-                        chr="all") {
-  if(direction=="both") {
-    idx<-!is.na(resultsTable$padj) & resultsTable$padj<padj & abs(resultsTable$log2FoldChange)>lfc
-  } else if(direction=="gt") {
-    idx<-!is.na(resultsTable$padj) & resultsTable$padj<padj & resultsTable$log2FoldChange>lfc
-  } else if(direction=="lt") {
-    idx<-!is.na(resultsTable$padj) & resultsTable$padj<padj & resultsTable$log2FoldChange<lfc
-  } else {
-    print("direction must be 'both' to get both tails, \n'gt' to get lfc larger than a specific value, \nor 'lt' to get lfc less than a certain value")
-  }
-  if(chr=="all"){
-    idx<-idx
-  } else if(chr=="chrX"){
-    idx<-idx & resultsTable$chr=="chrX"
-  } else if(chr=="autosomes"){
-    idx<-idx & resultsTable$chr!="chrX"
-  } else {
-    print("chr must be one of 'all', 'chrX' or 'autosomes'")
-  }
-  filtTable<-resultsTable[idx,c("baseMean","log2FoldChange","padj",
-                                "wormbase","chr","start","end","strand")]
-  write.csv(filtTable,file=paste0(outPath,"/txt/filtResults_p",
-                                      padjVal,"_",direction,"-","lfc",
-                                      lfcVal,"_",chr,".csv"), row.names=F,
-                                      quote=F)
-  return(filtTable)
-}
+source("functions.R")
 
-filterResults(results,padj=0.05,lfc=0,"both","all")
+
+nrow(filterResults(results,padj=0.05,lfc=0,"both","all"))
+nrow(filterResults(results,padj=0.05,lfc=0.5,"both","all"))
+nrow(filterResults(results,padj=0.05,lfc=0.75,"both","all"))
+nrow(filterResults(results,padj=0.05,lfc=1,"both","all"))
+nrow(filterResults(results,padj=0.01,lfc=0,"both","all"))
+nrow(filterResults(results,padj=0.01,lfc=0.5,"both","all"))
+nrow(filterResults(results,padj=0.01,lfc=0.75,"both","all"))
+nrow(filterResults(results,padj=0.01,lfc=1,"both","all"))
+
+
+salmondc<-filterResults(results,padj=0.05,lfc=0.5,"gt","chrX")
+salmondcgr<-metadata[metadata$wormbase %in% salmondc$wormbase]
+mcols(salmondcgr)<-cbind(mcols(salmondcgr),
+                         salmondc[match(salmondcgr$wormbase,
+                                        salmondc$wormbase),c(1:3)])
+salmondcgr
+saveRDS(salmondcgr,file=paste0(outPath,"/rds/",fileNamePrefix,
+                               "JulieData_chrXup_lfc",
+                                formatC(lfcVal,format="e",digits=0),"_p",
+                                formatC(padjVal,format="e",digits=0),
+                                "_gr.rds"))
+
+
